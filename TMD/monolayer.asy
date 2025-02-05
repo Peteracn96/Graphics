@@ -167,7 +167,7 @@ for(int x = 0; x < Nx; ++x) {
 
         Bond(X_1_array[index],M_2_array[index]).draw(radius=bond_radius);
         Bond(X_1_bottom_array[index],M_2_array[index]).draw(radius=bond_radius);
-    } // experimentar trocar Nx e Ny a ver se este blæoc esta bem
+    }
 
 }
 
