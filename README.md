@@ -9,4 +9,4 @@ Right below you can see a selection of small projects I have concluded.
 
 The projects are grouped by programming languages and are inside a mother folder, having this portfolio a mother folder for each programming language or graphics editor software.
 At the moment there are 4 folders named ```LaTeX```, ```Asymptote```, ```Mathematica```, and ```Inkscape```.
-Each small project is contained inside a folder including the source code, .png and .pdf versions of the graphic, and a brief technical explanation of what it represents in a descriptive PDF file.
+Each small project is contained inside a folder including the source code, a  ``.pdf`` version of the graphic including a ``.png`` one for Asymptote generated ones, and a brief technical explanation of what it represents in a descriptive PDF file.
