@@ -1,0 +1,520 @@
+\documentclass[tikz,border=3.14mm]{standalone}
+\usepackage{tikz-3dplot}
+\usepackage{pgfplots}
+\usepackage{ifthen}
+\usepackage{amsmath}
+\usepackage{fontspec}
+\usepackage{physics}
+\usepackage{unicode-math}
+\usepackage{amsmath}
+%\setmainfont{Arial}
+\usepgfplotslibrary{fillbetween}
+\usetikzlibrary{arrows.meta,bending,shapes.geometric,intersections,arrows.meta,decorations,decorations.markings,3d, decorations.pathmorphing}
+\usepgfmodule{nonlineartransformations}
+% Max magic
+\makeatletter 
+
+%Def for cubes
+\tikzset{
+  annotated cuboid/.pic={
+    \tikzset{%
+      every edge quotes/.append style={midway, auto},
+      /cuboid/.cd,
+      #1
+    }
+    \draw [every edge/.append style={pic actions, densely dashed, opacity=.5}, pic actions]
+    (0,0,0) coordinate (o) -- ++(-\cubescale*\cubex,0,0) coordinate (a) -- ++(0,-\cubescale*\cubey,0) coordinate (b) edge coordinate [pos=1] (g) ++(0,0,-\cubescale*\cubez)  -- ++(\cubescale*\cubex,0,0) coordinate (c) -- cycle
+    (o) -- ++(0,0,-\cubescale*\cubez) coordinate (d) -- ++(0,-\cubescale*\cubey,0) coordinate (e) edge (g) -- (c) -- cycle
+    (o) -- (a) -- ++(0,0,-\cubescale*\cubez) coordinate (f) edge (g) -- (d) -- cycle;
+    \path [every edge/.append style={pic actions, |-|}]
+    (b) +(0,-5pt) coordinate (b1) edge ["\cubex \cubeunits"'] (b1 -| c)
+    (b) +(-5pt,0) coordinate (b2) edge ["\cubey \cubeunits"] (b2 |- a)
+    (c) +(3.5pt,-3.5pt) coordinate (c2) edge ["\cubez \cubeunits"'] ([xshift=3.5pt,yshift=-3.5pt]e)
+    ;
+  },
+  /cuboid/.search also={/tikz},
+  /cuboid/.cd,
+  width/.store in=\cubex,
+  height/.store in=\cubey,
+  depth/.store in=\cubez,
+  units/.store in=\cubeunits,
+  scale/.store in=\cubescale,
+  width=10,
+  height=10,
+  depth=10,
+  units=cm,
+  scale=.1,
+}
+
+% the first part is not in use here
+\def\tikz@scan@transform@one@point#1{%
+  \tikz@scan@one@point\pgf@process#1%
+  \pgf@pos@transform{\pgf@x}{\pgf@y}}
+\tikzset{%
+  grid source opposite corners/.code args={#1and#2}{%
+   \pgfextract@process\tikz@transform@source@southwest{%
+     \tikz@scan@transform@one@point{#1}}%
+   \pgfextract@process\tikz@transform@source@northeast{%
+     \tikz@scan@transform@one@point{#2}}%
+  },
+  grid target corners/.code args={#1--#2--#3--#4}{%
+   \pgfextract@process\tikz@transform@target@southwest{%
+     \tikz@scan@transform@one@point{#1}}%
+   \pgfextract@process\tikz@transform@target@southeast{%
+     \tikz@scan@transform@one@point{#2}}%
+   \pgfextract@process\tikz@transform@target@northeast{%
+     \tikz@scan@transform@one@point{#3}}%
+   \pgfextract@process\tikz@transform@target@northwest{%
+     \tikz@scan@transform@one@point{#4}}%
+  }
+}
+
+\def\tikzgridtransform{%
+  \pgfextract@process\tikz@current@point{}%
+  \pgf@process{%
+    \pgfpointdiff{\tikz@transform@source@southwest}%
+      {\tikz@transform@source@northeast}%
+  }%
+  \pgf@xc=\pgf@x\pgf@yc=\pgf@y%
+  \pgf@process{%
+    \pgfpointdiff{\tikz@transform@source@southwest}{\tikz@current@point}%
+  }%
+  \pgfmathparse{\pgf@x/\pgf@xc}\let\tikz@tx=\pgfmathresult%
+  \pgfmathparse{\pgf@y/\pgf@yc}\let\tikz@ty=\pgfmathresult%
+  %
+  \pgfpointlineattime{\tikz@ty}{%
+    \pgfpointlineattime{\tikz@tx}{\tikz@transform@target@southwest}%
+      {\tikz@transform@target@southeast}}{%
+    \pgfpointlineattime{\tikz@tx}{\tikz@transform@target@northwest}%
+      {\tikz@transform@target@northeast}}%
+}
+
+% Initialize H matrix for perspective view
+\pgfmathsetmacro\H@tpp@aa{1}\pgfmathsetmacro\H@tpp@ab{0}\pgfmathsetmacro\H@tpp@ac{0}%\pgfmathsetmacro\H@tpp@ad{0}
+\pgfmathsetmacro\H@tpp@ba{0}\pgfmathsetmacro\H@tpp@bb{1}\pgfmathsetmacro\H@tpp@bc{0}%\pgfmathsetmacro\H@tpp@bd{0}
+\pgfmathsetmacro\H@tpp@ca{0}\pgfmathsetmacro\H@tpp@cb{0}\pgfmathsetmacro\H@tpp@cc{1}%\pgfmathsetmacro\H@tpp@cd{0}
+\pgfmathsetmacro\H@tpp@da{0}\pgfmathsetmacro\H@tpp@db{0}\pgfmathsetmacro\H@tpp@dc{0}%\pgfmathsetmacro\H@tpp@dd{1}
+
+%Initialize H matrix for main rotation
+\pgfmathsetmacro\H@rot@aa{1}\pgfmathsetmacro\H@rot@ab{0}\pgfmathsetmacro\H@rot@ac{0}%\pgfmathsetmacro\H@rot@ad{0}
+\pgfmathsetmacro\H@rot@ba{0}\pgfmathsetmacro\H@rot@bb{1}\pgfmathsetmacro\H@rot@bc{0}%\pgfmathsetmacro\H@rot@bd{0}
+\pgfmathsetmacro\H@rot@ca{0}\pgfmathsetmacro\H@rot@cb{0}\pgfmathsetmacro\H@rot@cc{1}%\pgfmathsetmacro\H@rot@cd{0}
+%\pgfmathsetmacro\H@rot@da{0}\pgfmathsetmacro\H@rot@db{0}\pgfmathsetmacro\H@rot@dc{0}\pgfmathsetmacro\H@rot@dd{1}
+
+\pgfkeys{
+    /three point perspective/.cd,
+        p/.code args={(#1,#2,#3)}{
+            \pgfmathparse{int(round(#1))}
+            \ifnum\pgfmathresult=0\else
+                \pgfmathsetmacro\H@tpp@ba{#2/#1}
+                \pgfmathsetmacro\H@tpp@ca{#3/#1}
+                \pgfmathsetmacro\H@tpp@da{ 1/#1}
+                \coordinate (vp-p) at (#1,#2,#3);
+            \fi
+        },
+        q/.code args={(#1,#2,#3)}{
+            \pgfmathparse{int(round(#2))}
+            \ifnum\pgfmathresult=0\else
+                \pgfmathsetmacro\H@tpp@ab{#1/#2}
+                \pgfmathsetmacro\H@tpp@cb{#3/#2}
+                \pgfmathsetmacro\H@tpp@db{ 1/#2}
+                \coordinate (vp-q) at (#1,#2,#3);
+            \fi
+        },
+        r/.code args={(#1,#2,#3)}{
+            \pgfmathparse{int(round(#3))}
+            \ifnum\pgfmathresult=0\else
+                \pgfmathsetmacro\H@tpp@ac{#1/#3}
+                \pgfmathsetmacro\H@tpp@bc{#2/#3}
+                \pgfmathsetmacro\H@tpp@dc{ 1/#3}
+                \coordinate (vp-r) at (#1,#2,#3);
+            \fi
+        },
+        coordinate/.code args={#1,#2,#3}{
+           \pgfmathsetmacro\tpp@x{#1} %<- Max' fix
+            \pgfmathsetmacro\tpp@y{#2}
+            \pgfmathsetmacro\tpp@z{#3}
+        },
+}
+
+\tikzset{
+    view/.code 2 args={
+        \pgfmathsetmacro\rot@main@theta{#1}
+        \pgfmathsetmacro\rot@main@phi{#2}
+        % Row 1
+        \pgfmathsetmacro\H@rot@aa{cos(\rot@main@phi)}
+        \pgfmathsetmacro\H@rot@ab{sin(\rot@main@phi)}
+        \pgfmathsetmacro\H@rot@ac{0}
+        % Row 2
+        \pgfmathsetmacro\H@rot@ba{-cos(\rot@main@theta)*sin(\rot@main@phi)}
+        \pgfmathsetmacro\H@rot@bb{cos(\rot@main@phi)*cos(\rot@main@theta)}
+        \pgfmathsetmacro\H@rot@bc{sin(\rot@main@theta)}
+        % Row 3
+        \pgfmathsetmacro\H@m@ca{sin(\rot@main@phi)*sin(\rot@main@theta)}
+        \pgfmathsetmacro\H@m@cb{-cos(\rot@main@phi)*sin(\rot@main@theta)}
+        \pgfmathsetmacro\H@m@cc{cos(\rot@main@theta)}
+        % Set vector values
+        \pgfmathsetmacro\vec@x@x{\H@rot@aa}
+        \pgfmathsetmacro\vec@y@x{\H@rot@ab}
+        \pgfmathsetmacro\vec@z@x{\H@rot@ac}
+        \pgfmathsetmacro\vec@x@y{\H@rot@ba}
+        \pgfmathsetmacro\vec@y@y{\H@rot@bb}
+        \pgfmathsetmacro\vec@z@y{\H@rot@bc}
+        % Set pgf vectors
+        \pgfsetxvec{\pgfpoint{\vec@x@x cm}{\vec@x@y cm}}
+        \pgfsetyvec{\pgfpoint{\vec@y@x cm}{\vec@y@y cm}}
+        \pgfsetzvec{\pgfpoint{\vec@z@x cm}{\vec@z@y cm}}
+    },
+}
+
+\tikzset{
+    perspective/.code={\pgfkeys{/three point perspective/.cd,#1}},
+    perspective/.default={p={(15,0,0)},q={(0,15,0)},r={(0,0,50)}},
+}
+
+\tikzdeclarecoordinatesystem{three point perspective}{
+    \pgfkeys{/three point perspective/.cd,coordinate={#1}}
+    \pgfmathsetmacro\temp@p@w{\H@tpp@da*\tpp@x + \H@tpp@db*\tpp@y + \H@tpp@dc*\tpp@z + 1}
+    \pgfmathsetmacro\temp@p@x{(\H@tpp@aa*\tpp@x + \H@tpp@ab*\tpp@y + \H@tpp@ac*\tpp@z)/\temp@p@w}
+    \pgfmathsetmacro\temp@p@y{(\H@tpp@ba*\tpp@x + \H@tpp@bb*\tpp@y + \H@tpp@bc*\tpp@z)/\temp@p@w}
+    \pgfmathsetmacro\temp@p@z{(\H@tpp@ca*\tpp@x + \H@tpp@cb*\tpp@y + \H@tpp@cc*\tpp@z)/\temp@p@w}
+    \pgfpointxyz{\temp@p@x}{\temp@p@y}{\temp@p@z}
+}
+\tikzaliascoordinatesystem{tpp}{three point perspective}
+
+
+%PArallelepiped code
+\pgfkeys{/pgf/.cd,
+  parallelepiped offset x/.initial=2mm,
+  parallelepiped offset y/.initial=2mm
+}
+\pgfdeclareshape{parallelepiped}
+{
+  \inheritsavedanchors[from=rectangle] % this is nearly a rectangle
+  \inheritanchorborder[from=rectangle]
+  \inheritanchor[from=rectangle]{north}
+  \inheritanchor[from=rectangle]{north west}
+  \inheritanchor[from=rectangle]{north east}
+  \inheritanchor[from=rectangle]{center}
+  \inheritanchor[from=rectangle]{west}
+  \inheritanchor[from=rectangle]{east}
+  \inheritanchor[from=rectangle]{mid}
+  \inheritanchor[from=rectangle]{mid west}
+  \inheritanchor[from=rectangle]{mid east}
+  \inheritanchor[from=rectangle]{base}
+  \inheritanchor[from=rectangle]{base west}
+  \inheritanchor[from=rectangle]{base east}
+  \inheritanchor[from=rectangle]{south}
+  \inheritanchor[from=rectangle]{south west}
+  \inheritanchor[from=rectangle]{south east}
+  \backgroundpath{
+    % store lower right in xa/ya and upper right in xb/yb
+    \southwest \pgf@xa=\pgf@x \pgf@ya=\pgf@y
+    \northeast \pgf@xb=\pgf@x \pgf@yb=\pgf@y
+    \pgfmathsetlength\pgfutil@tempdima{\pgfkeysvalueof{/pgf/parallelepiped offset x}}
+    \pgfmathsetlength\pgfutil@tempdimb{\pgfkeysvalueof{/pgf/parallelepiped offset y}}
+    \def\ppd@offset{\pgfpoint{\pgfutil@tempdima}{\pgfutil@tempdimb}}
+    \pgfpathmoveto{\pgfqpoint{\pgf@xa}{\pgf@ya}}
+    \pgfpathlineto{\pgfqpoint{\pgf@xb}{\pgf@ya}}
+    \pgfpathlineto{\pgfqpoint{\pgf@xb}{\pgf@yb}}
+    \pgfpathlineto{\pgfqpoint{\pgf@xa}{\pgf@yb}}
+    \pgfpathclose
+    \pgfpathmoveto{\pgfqpoint{\pgf@xb}{\pgf@ya}}
+    \pgfpathlineto{\pgfpointadd{\pgfpoint{\pgf@xb}{\pgf@ya}}{\ppd@offset}}
+    \pgfpathlineto{\pgfpointadd{\pgfpoint{\pgf@xb}{\pgf@yb}}{\ppd@offset}}
+    \pgfpathlineto{\pgfpointadd{\pgfpoint{\pgf@xa}{\pgf@yb}}{\ppd@offset}}
+    \pgfpathlineto{\pgfqpoint{\pgf@xa}{\pgf@yb}}
+    \pgfpathmoveto{\pgfqpoint{\pgf@xb}{\pgf@yb}}
+    \pgfpathlineto{\pgfpointadd{\pgfpoint{\pgf@xb}{\pgf@yb}}{\ppd@offset}}
+  }
+}
+
+\makeatother
+\tikzset{set mark/.style args={#1|#2}{
+postaction={decorate,decoration={markings,
+mark=at position #1 with {\coordinate(#2);}}}}}
+
+\pgfplotsset{compat=1.16,colormap={CM}{rgb=(0,0,1) color=(red) rgb=(0,0,1)}}
+
+
+\tikzset{
+    set arrow inside/.code={\pgfqkeys{/tikz/arrow inside}{#1}},
+    set arrow inside={end/.initial=>, opt/.initial=},
+    /pgf/decoration/Mark/.style={
+        mark/.expanded=at position #1 with
+        {
+            \noexpand\arrow[\pgfkeysvalueof{/tikz/arrow inside/opt}]{\pgfkeysvalueof{/tikz/arrow inside/end}}
+        }
+    },
+    arrow inside/.style 2 args={
+        set arrow inside={#1},
+        postaction={
+            decorate,decoration={
+                markings,Mark/.list={#2}
+            }
+        }
+    },
+}
+
+\tikzset{use fpu reciprocal/.code={%
+\def\pgfmathreciprocal@##1{%
+    \begingroup
+    \pgfkeys{/pgf/fpu=true,/pgf/fpu/output format=fixed}%
+    \pgfmathparse{1/##1}%
+    \pgfmath@smuggleone\pgfmathresult
+    \endgroup
+}}}
+
+
+\begin{document}
+
+\tdplotsetmaincoords{77}{0}
+
+\begin{tikzpicture}[scale=3.5,%tdplot_main_coords
+ axis/.style={thick,->},
+    >=stealth,
+    decoration={snake,   % <-- added
+                    pre length=0pt,post length=5pt,% <-- for better looking of arrow,
+                    },
+    wave/.style={thick,color=#1,smooth},
+  view={\tdplotmaintheta}{\tdplotmainphi},
+            perspective={
+                p = {(0,0,10)},
+                q = {(0,10,1.5)},
+                r = {(0,0,-10)}
+            }
+  ]
+
+  \path[tdplot_screen_coords] (-1.5,0) rectangle (1.5,1.8);
+  
+\def\a{0.2} // defines bond length
+
+\def\xshift{-\a*sqrt(3)/4}
+\def\dx{\a*sqrt(3)/4}
+\def\yshift{3*\a/2}
+ %(x,y,z)
+\def\xlimit{10}
+\def\ylimit{3}
+\def\zlimit{3.2}
+\def\ztop{1}
+
+\definecolor{aliceblue}{rgb}{0.94,0.97,1}
+
+\def\N{5}
+\def\width{\a}
+\def\height{0.5*\a}
+\def\depth{(\ylimit-1)*\a+(\ylimit-1)*\a/2 + 1}
+
+\def\spacing{(2*(\xlimit*\dx + \dx)-\width)/(\N-1)}
+ 
+\begin{scope}[opacity=1.0]
+
+%Draws metalic rods
+%gray!80!black
+\def\pluscolor{white!0!red}
+\def\minuscolor{white!40!blue}
+%First rod
+%front
+\def\ii{0}
+\draw[fill=\pluscolor,draw=none] (tpp cs:{-\xlimit*\dx - \dx + \ii*\spacing},{-1},{\zlimit*\a}) -- (tpp cs:{-\xlimit*\dx - \dx + \width  + \ii*\spacing},{-1},{\zlimit*\a}) -- (tpp cs:{-\xlimit*\dx - \dx  + \width + \ii*\spacing},{-1},{\zlimit*\a - \height}) -- (tpp cs:{-\xlimit*\dx - \dx + \ii*\spacing},{-1},{\zlimit*\a - \height}) -- (tpp cs:{-\xlimit*\dx - \dx + \ii*\spacing},{-1},{\zlimit*\a});
+
+\draw (tpp cs:{-\xlimit*\dx - \dx + 0.5*\width},{-1},{\zlimit*\a - 0.5*\height}) node { \textcolor{black}{$+$}};
+
+%right
+\draw[fill=\pluscolor,draw=none] (tpp cs:{-\xlimit*\dx - \dx  + \width + \ii*\spacing},{-1},{\zlimit*\a - \height}) -- (tpp cs:{-\xlimit*\dx - \dx  + \width + \ii*\spacing},{-1 + \depth},{\zlimit*\a - \height}) -- (tpp cs:{-\xlimit*\dx - \dx  + \width + \ii*\spacing},{-1 + \depth},{\zlimit*\a}) -- (tpp cs:{-\xlimit*\dx - \dx  + \width + \ii*\spacing},{-1},{\zlimit*\a}) -- cycle;
+%top
+\draw[fill=\pluscolor,draw=none] (tpp cs:{-\xlimit*\dx - \dx + \ii*\spacing},{-1},{\zlimit*\a}) -- (tpp cs:{-\xlimit*\dx - \dx + \ii*\spacing},{-1 + \depth},{\zlimit*\a}) -- (tpp cs:{-\xlimit*\dx - \dx  + \width + \ii*\spacing},{-1 + \depth},{\zlimit*\a}) -- (tpp cs:{-\xlimit*\dx - \dx  + \width + \ii*\spacing},{-1},{\zlimit*\a}) -- cycle;
+
+
+%Second rod
+\draw[fill=\minuscolor,draw=none] (tpp cs:{-\xlimit*\dx - \dx + 1*\spacing},{-1},{\zlimit*\a}) -- (tpp cs:{-\xlimit*\dx - \dx + \width  + 1*\spacing},{-1},{\zlimit*\a}) -- (tpp cs:{-\xlimit*\dx - \dx  + \width + 1*\spacing},{-1},{\zlimit*\a - \height}) -- (tpp cs:{-\xlimit*\dx - \dx + 1*\spacing},{-1},{\zlimit*\a - \height}) -- (tpp cs:{-\xlimit*\dx - \dx + 1*\spacing},{-1},{\zlimit*\a});
+
+\draw (tpp cs:{-\xlimit*\dx - \dx + 0.5*\width  + 1*\spacing},{-1},{\zlimit*\a - 0.5*\height}) node { \textcolor{black}{$-$}};
+
+%right
+\draw[fill=\minuscolor,draw=none] (tpp cs:{-\xlimit*\dx - \dx  + \width + 1*\spacing},{-1},{\zlimit*\a - \height}) -- (tpp cs:{-\xlimit*\dx - \dx  + \width + 1*\spacing},{-1 + \depth},{\zlimit*\a - \height}) -- (tpp cs:{-\xlimit*\dx - \dx  + \width + 1*\spacing},{-1 + \depth},{\zlimit*\a}) -- (tpp cs:{-\xlimit*\dx - \dx  + \width + 1*\spacing},{-1},{\zlimit*\a}) -- cycle;
+%top
+\draw[fill=\minuscolor,draw=none] (tpp cs:{-\xlimit*\dx - \dx + 1*\spacing},{-1},{\zlimit*\a}) -- (tpp cs:{-\xlimit*\dx - \dx + 1*\spacing},{-1 + \depth},{\zlimit*\a}) -- (tpp cs:{-\xlimit*\dx - \dx  + \width + 1*\spacing},{-1 + \depth},{\zlimit*\a}) -- (tpp cs:{-\xlimit*\dx - \dx  + \width + 1*\spacing},{-1},{\zlimit*\a}) -- cycle;
+
+
+%3rd rod
+\draw[fill=\pluscolor,draw=none] (tpp cs:{-\xlimit*\dx - \dx + 2*\spacing},{-1},{\zlimit*\a}) -- (tpp cs:{-\xlimit*\dx - \dx + \width  + 2*\spacing},{-1},{\zlimit*\a}) -- (tpp cs:{-\xlimit*\dx - \dx  + \width + 2*\spacing},{-1},{\zlimit*\a - \height}) -- (tpp cs:{-\xlimit*\dx - \dx + 2*\spacing},{-1},{\zlimit*\a - \height}) -- (tpp cs:{-\xlimit*\dx - \dx + 2*\spacing},{-1},{\zlimit*\a});
+
+\draw (tpp cs:{-\xlimit*\dx - \dx + 0.5*\width  + 2*\spacing},{-1},{\zlimit*\a - 0.5*\height}) node { \textcolor{black}{$+$}};
+
+%right
+\draw[fill=\pluscolor,draw=none] (tpp cs:{-\xlimit*\dx - \dx  + \width + 2*\spacing},{-1},{\zlimit*\a - \height}) -- (tpp cs:{-\xlimit*\dx - \dx  + \width + 2*\spacing},{-1 + \depth},{\zlimit*\a - \height}) -- (tpp cs:{-\xlimit*\dx - \dx  + \width + 2*\spacing},{-1 + \depth},{\zlimit*\a}) -- (tpp cs:{-\xlimit*\dx - \dx  + \width + 2*\spacing},{-1},{\zlimit*\a}) -- cycle;
+%top
+\draw[fill=\pluscolor,draw=none] (tpp cs:{-\xlimit*\dx - \dx + 2*\spacing},{-1},{\zlimit*\a}) -- (tpp cs:{-\xlimit*\dx - \dx + 2*\spacing},{-1 + \depth},{\zlimit*\a}) -- (tpp cs:{-\xlimit*\dx - \dx  + \width + 2*\spacing},{-1 + \depth},{\zlimit*\a}) -- (tpp cs:{-\xlimit*\dx - \dx  + \width + 2*\spacing},{-1},{\zlimit*\a}) -- cycle;
+
+%4th rod
+\draw[fill=\minuscolor,draw=none] (tpp cs:{-\xlimit*\dx - \dx + 3*\spacing},{-1},{\zlimit*\a}) -- (tpp cs:{-\xlimit*\dx - \dx + \width  + 3*\spacing},{-1},{\zlimit*\a}) -- (tpp cs:{-\xlimit*\dx - \dx  + \width + 3*\spacing},{-1},{\zlimit*\a - \height}) -- (tpp cs:{-\xlimit*\dx - \dx + 3*\spacing},{-1},{\zlimit*\a - \height}) -- (tpp cs:{-\xlimit*\dx - \dx + 3*\spacing},{-1},{\zlimit*\a});
+
+\draw (tpp cs:{-\xlimit*\dx - \dx + 0.5*\width  + 3*\spacing},{-1},{\zlimit*\a - 0.5*\height}) node { \textcolor{black}{$-$}};
+
+%lefy
+\draw[fill=\minuscolor,draw=none] (tpp cs:{-\xlimit*\dx - \dx  + 0*\width + 3*\spacing},{-1},{\zlimit*\a - \height}) -- (tpp cs:{-\xlimit*\dx - \dx  + 0*\width + 3*\spacing},{-1 + \depth},{\zlimit*\a - \height}) -- (tpp cs:{-\xlimit*\dx - \dx  + 0*\width + 3*\spacing},{-1 + \depth},{\zlimit*\a}) -- (tpp cs:{-\xlimit*\dx - \dx  + 0*\width + 3*\spacing},{-1},{\zlimit*\a}) -- cycle;
+%top
+\draw[fill=\minuscolor,draw=none] (tpp cs:{-\xlimit*\dx - \dx + 3*\spacing},{-1},{\zlimit*\a}) -- (tpp cs:{-\xlimit*\dx - \dx + 3*\spacing},{-1 + \depth},{\zlimit*\a}) -- (tpp cs:{-\xlimit*\dx - \dx  + \width + 3*\spacing},{-1 + \depth},{\zlimit*\a}) -- (tpp cs:{-\xlimit*\dx - \dx  + \width + 3*\spacing},{-1},{\zlimit*\a}) -- cycle;
+
+%5th rod
+\draw[fill=\pluscolor,draw=none] (tpp cs:{-\xlimit*\dx - \dx + 4*\spacing},{-1},{\zlimit*\a}) -- (tpp cs:{-\xlimit*\dx - \dx + \width  + 4*\spacing},{-1},{\zlimit*\a}) -- (tpp cs:{-\xlimit*\dx - \dx  + \width + 4*\spacing},{-1},{\zlimit*\a - \height}) -- (tpp cs:{-\xlimit*\dx - \dx + 4*\spacing},{-1},{\zlimit*\a - \height}) -- (tpp cs:{-\xlimit*\dx - \dx + 4*\spacing},{-1},{\zlimit*\a});
+
+\draw (tpp cs:{-\xlimit*\dx - \dx + 0.5*\width  + 4*\spacing},{-1},{\zlimit*\a - 0.5*\height}) node { \textcolor{black}{$+$}};
+
+%left
+\draw[fill=\pluscolor,draw=none] (tpp cs:{-\xlimit*\dx - \dx  + 0*\width + 4*\spacing},{-1},{\zlimit*\a - \height}) -- (tpp cs:{-\xlimit*\dx - \dx  + 0*\width + 4*\spacing},{-1 + \depth},{\zlimit*\a - \height}) -- (tpp cs:{-\xlimit*\dx - \dx  + 0*\width + 4*\spacing},{-1 + \depth},{\zlimit*\a}) -- (tpp cs:{-\xlimit*\dx - \dx  + 0*\width + 4*\spacing},{-1},{\zlimit*\a}) -- cycle;
+%top
+\draw[fill=\pluscolor,draw=none] (tpp cs:{-\xlimit*\dx - \dx + 4*\spacing},{-1},{\zlimit*\a}) -- (tpp cs:{-\xlimit*\dx - \dx + 4*\spacing},{-1 + \depth},{\zlimit*\a}) -- (tpp cs:{-\xlimit*\dx - \dx  + \width + 4*\spacing},{-1 + \depth},{\zlimit*\a}) -- (tpp cs:{-\xlimit*\dx - \dx  + \width + 4*\spacing},{-1},{\zlimit*\a}) -- cycle;
+
+%Draws the connecting wires
+
+%front wires
+\draw[-,black,thick] (tpp cs:{-\xlimit*\dx - \dx + \ii*\spacing + \width/2},{-1},{\zlimit*\a - \height}) -- (tpp cs:{-\xlimit*\dx - \dx + \ii*\spacing + \width/2},{-1 - 2*\a},{\zlimit*\a - \height});
+
+\draw[-,black,thick] (tpp cs:{-\xlimit*\dx - \dx + 2*\spacing + \width/2},{-1},{\zlimit*\a - \height}) -- (tpp cs:{-\xlimit*\dx - \dx + 2*\spacing + \width/2},{-1 - 2*\a},{\zlimit*\a - \height});
+
+\draw[-,black,thick] (tpp cs:{-\xlimit*\dx - \dx + 4*\spacing + \width/2},{-1},{\zlimit*\a - \height}) -- (tpp cs:{-\xlimit*\dx - \dx + 4*\spacing + \width/2},{-1 - 2*\a},{\zlimit*\a - \height});
+
+\draw[-,black,thick] (tpp cs:{-\xlimit*\dx - \dx + 0*\spacing + \width/2},{-1 - 2*\a},{\zlimit*\a - \height}) -- (tpp cs:{-\xlimit*\dx - \dx + 5*\spacing + \width/2},{-1 - 2*\a},{\zlimit*\a - \height});
+
+%back wires
+\draw[-,black,thick] (tpp cs:{-\xlimit*\dx - \dx + 1*\spacing + \width/2},{-1 + \depth},{\zlimit*\a - \height}) -- (tpp cs:{-\xlimit*\dx - \dx + 1*\spacing + \width/2},{-1  + \depth + 2.5*\a},{\zlimit*\a - \height});
+
+\draw[-,black,thick] (tpp cs:{-\xlimit*\dx - \dx + 3*\spacing + \width/2},{-1 + \depth},{\zlimit*\a - \height}) -- (tpp cs:{-\xlimit*\dx - \dx + 3*\spacing + \width/2},{-1  + \depth + 2.5*\a},{\zlimit*\a - \height});
+
+\draw[-,black,thick] (tpp cs:{-\xlimit*\dx - \dx + 1*\spacing + \width/2},{-1 + \depth +  2.5*\a},{\zlimit*\a - \height}) -- (tpp cs:{-\xlimit*\dx - \dx + 5*\spacing + \width/2},{-1 + \depth +  2.5*\a},{\zlimit*\a - \height});
+
+%connection to battery
+
+\draw[-,black,thick] (tpp cs:{-\xlimit*\dx - \dx + 5*\spacing + \width/2},{-1 + \depth +  2.5*\a},{\zlimit*\a - \height}) -- (tpp cs:{-\xlimit*\dx - \dx + 5*\spacing + \width/2},{-1 + \depth + 2*\a - (\depth + 4*\a)/2 + 0.4*\a},{\zlimit*\a - \height});
+
+\draw[-,black,thick] (tpp cs:{-\xlimit*\dx - \dx + 5*\spacing + \width/2},{-1 - 2*\a},{\zlimit*\a - \height}) -- (tpp cs:{-\xlimit*\dx - \dx + 5*\spacing + \width/2},{-1 - 2*\a +(\depth + 4*\a)/2  - 0.4*\a},{\zlimit*\a - \height});
+
+%Draws battery
+\draw[-,black,thick] (tpp cs:{-\xlimit*\dx - \dx + 5*\spacing + \width/2 - 0.2*\a},{-1 + \depth + 2*\a - (\depth + 4*\a)/2 + 0.4*\a},{\zlimit*\a - \height}) -- (tpp cs:{-\xlimit*\dx - \dx + 5*\spacing + \width/2 + 0.2*\a},{-1 + \depth + 2*\a - (\depth + 4*\a)/2 + 0.4*\a},{\zlimit*\a - \height});
+
+\draw[-,black,thick] (tpp cs:{-\xlimit*\dx - \dx + 5*\spacing + \width/2 - 0.4*\a},{-1 - 2*\a +(\depth + 4*\a)/2  - 0.4*\a},{\zlimit*\a - \height}) -- (tpp cs:{-\xlimit*\dx - \dx + 5*\spacing + \width/2 + 0.4*\a},{-1 - 2*\a +(\depth + 4*\a)/2  - 0.4*\a},{\zlimit*\a - \height});
+
+\end{scope}
+\begin{scope}[opacity=0.5]
+    
+\def\bottomcolor{blue!25!white}
+
+    %draws top face of the bottom paralelepípedo
+     \draw[fill=aliceblue] (tpp cs:{-\xlimit*\dx - \dx},-1,{\ztop}) -- (tpp cs:{\xlimit*\dx + \dx},-1,{\ztop}) -- (tpp cs:{\xlimit*\dx + \dx},{(\ylimit-1)*\a+(\ylimit-1)*\a/2},{\ztop}) -- (tpp cs:{-\xlimit*\dx - \dx},{(\ylimit-1)*\a+(\ylimit-1)*\a/2},{\ztop}) -- cycle;
+
+    %draws front face of the bottom paralelepípedo
+     \draw[gray!50,fill=aliceblue,thick] (tpp cs:{-\xlimit*\dx - \dx},-1,{\zlimit*\a}) -- (tpp cs:{-\xlimit*\dx - \dx},-1,\ztop)  -- (tpp cs:{\xlimit*\dx + \dx},-1,{\ztop}) -- (tpp cs:{\xlimit*\dx + \dx},-1,{\zlimit*\a}) -- cycle;
+     
+
+    %draws back face of the bottom paralelepípedo
+    \draw[gray!50,dashed,fill=aliceblue,thick]
+    (tpp cs:{-\xlimit*\dx - \dx},{(\ylimit-1)*\a+(\ylimit-1)*\a/2},\ztop)  -- (tpp cs:{-\xlimit*\dx - \dx},{(\ylimit-1)*\a+(\ylimit-1)*\a/2},{\zlimit*\a}) -- (tpp cs:{\xlimit*\dx + \dx},{(\ylimit-1)*\a+(\ylimit-1)*\a/2},{\zlimit*\a}) --  (tpp cs:{\xlimit*\dx + \dx},{(\ylimit-1)*\a+(\ylimit-1)*\a/2},{\ztop});
+    \draw[gray!50,fill=aliceblue,thick]
+    (tpp cs:{\xlimit*\dx + \dx},{(\ylimit-1)*\a+(\ylimit-1)*\a/2},{\ztop}) -- (tpp cs:{-\xlimit*\dx - \dx},{(\ylimit-1)*\a+(\ylimit-1)*\a/2},\ztop);
+
+    %draws rightmost face of the bottom paralelepípedo
+    \draw[gray!50,thick]
+    (tpp cs:{\xlimit*\dx + \dx},-1,{\zlimit*\a})  -- (tpp cs:{\xlimit*\dx + \dx},-1,\ztop) -- (tpp cs:{\xlimit*\dx + \dx},{(\ylimit-1)*\a+(\ylimit-1)*\a/2},\ztop);
+    \draw[gray!50,dashed,thick]
+    (tpp cs:{\xlimit*\dx + \dx},{(\ylimit-1)*\a+(\ylimit-1)*\a/2},{\zlimit*\a}) -- (tpp cs:{\xlimit*\dx + \dx},-1,{\zlimit*\a});
+    \draw[draw=none,fill=aliceblue] (tpp cs:{\xlimit*\dx + \dx},-1,{\zlimit*\a})  -- (tpp cs:{\xlimit*\dx + \dx},-1,\ztop) -- (tpp cs:{\xlimit*\dx + \dx},{(\ylimit-1)*\a+(\ylimit-1)*\a/2},\ztop) -- (tpp cs:{\xlimit*\dx + \dx},{(\ylimit-1)*\a+(\ylimit-1)*\a/2},{\zlimit*\a}) -- cycle;
+
+    %draws leftmost face of the bottom paralelepípedo
+    \draw[gray!50,fill=aliceblue,thick]
+    (tpp cs:{-\xlimit*\dx - \dx},-1,{\zlimit*\a})  -- (tpp cs:{-\xlimit*\dx - \dx},-1,\ztop) -- (tpp cs:{-\xlimit*\dx - \dx},{(\ylimit-1)*\a+(\ylimit-1)*\a/2},\ztop);
+    \draw[gray!50,fill=aliceblue,thick,dashed]
+    (tpp cs:{-\xlimit*\dx - \dx},{(\ylimit-1)*\a+(\ylimit-1)*\a/2},\ztop) --  (tpp cs:{-\xlimit*\dx - \dx},{(\ylimit-1)*\a+(\ylimit-1)*\a/2},{\zlimit*\a}) -- (tpp cs:{-\xlimit*\dx - \dx},-1,{\zlimit*\a});
+
+    %draws bottom face of the bottom paralelepípedo
+    \draw[gray!50,thick] (tpp cs:{-\xlimit*\dx - \dx},-1,{\zlimit*\a}) -- (tpp cs:{+\xlimit*\dx + \dx},{-1},{\zlimit*\a});
+    \draw[draw=none,fill=aliceblue] (tpp cs:{-\xlimit*\dx - \dx},-1,{\zlimit*\a})  -- (tpp cs:{\xlimit*\dx + \dx},-1,{\zlimit*\a}) -- (tpp cs:{\xlimit*\dx + \dx},{(\ylimit-1)*\a+(\ylimit-1)*\a/2},{\zlimit*\a}) -- (tpp cs:{-\xlimit*\dx - \dx},{(\ylimit-1)*\a+(\ylimit-1)*\a/2},{\zlimit*\a}) -- cycle;
+
+\end{scope}   
+
+
+%draws rectangle in the same plane as the monolayer
+\draw[gray!50,thick]   (tpp cs:{-\xlimit*\dx - \dx},-1,1)  -- (tpp cs:{\xlimit*\dx + \dx},-1,1) -- (tpp cs:{\xlimit*\dx + \dx},{(\ylimit-1)*\a+(\ylimit-1)*\a/2},1) -- (tpp cs:{-\xlimit*\dx - \dx},{(\ylimit-1)*\a+(\ylimit-1)*\a/2},1) -- cycle;
+
+%Draws axis
+
+
+\draw[axis,black] (tpp cs:{-\xlimit*\dx - \dx },{-1},{1}) -- (tpp cs:{\xlimit*\dx + \dx+ \dx + 0.2*\a},{-1},{1}) node[below]{$x$};
+
+\draw[axis,black] (tpp cs:{-\xlimit*\dx - \dx},{-1},{1}) -- (tpp cs:{-\xlimit*\dx - \dx},{(\ylimit-1)*\a+(\ylimit-1)*\a/2 + 2*\a},{1}) node[left]{$y$};
+
+\draw[axis,black] (tpp cs:{-\xlimit*\dx - \dx},{-1},{1}) -- (tpp cs:{-\xlimit*\dx - \dx},{-1},1.5) node[left]{$z$};
+
+\def\axiscolor{black}
+
+%Draws period mark
+\draw[<->,black] (tpp cs:{-\xlimit*\dx - \dx + 0*\spacing + \width/2},{-1-0.8*\a},{\zlimit*\a - \height}) -- (tpp cs:{-\xlimit*\dx - \dx + 2*\spacing + \width/2},{-1-0.8*\a},{\zlimit*\a - \height}) node[pos=0.5,below]{$\scriptstyle L$};
+
+\draw ({\xlimit*\dx},{-1},{\zlimit*\a+\a/2}) node[anchor=north east] { \textcolor{black}{$\varepsilon_2$}};
+
+\draw ({\xlimit*\dx-0.00*\a},{(\ylimit-1)*\a},{1+ 2.5*\a}) node[anchor=north east] { \textcolor{black}{$\varepsilon_1$}};
+
+%Draws periodic potential 
+    \def\A{0.5*\height}
+    \def\H{1.5*\a} % altitude
+    \def\T{(2*\spacing + 0*\width/2)} %period
+
+    \def\potentialzshift{-2*\a}
+    \def\potentialyshift{+2.85*\a}
+     
+    \draw[black,domain={-\xlimit*\dx - 1*\dx}:{\xlimit*\dx + 1*\dx}, smooth,name path=sine]
+      plot (tpp cs:\x,-1,{\zlimit*\a - \height/2  + \A*cos(2*pi*\x/\T r)});
+
+%Draws hBN monolayer
+\begin{scope}
+
+\clip (tpp cs:{-\xlimit*\dx - \dx - 0.014},{-1 - 0.07},1)  -- (tpp cs:{\xlimit*\dx + \dx + 0.014},{-1 - 0.07},1) -- (tpp cs:{\xlimit*\dx + \dx + 0.014},{(\ylimit-1)*\a+(\ylimit-1)*\a/2 + 0.07},1) -- (tpp cs:{-\xlimit*\dx - \dx  - 0.014},{(\ylimit-1)*\a+(\ylimit-1)*\a/2+ 0.07},1) -- cycle;
+
+\foreach \j in {0,...,5}
+{
+    \foreach \i in {-8,...,6}
+    {           
+        \draw (tpp cs:{0 + \j*\dx + \i*2*\dx},{-1+\a/2 + \j*3*\a/2},1) -- (tpp cs:{ \j*\dx-1*\dx + \i*2*\dx},{-1 + \j*3*\a/2},1);
+        \draw (tpp cs:{ \j*\dx + 0 + \i*2*\dx},{-1+\a/2 + \j*3*\a/2},1) -- (tpp cs:{ \j*\dx + 1*\dx + \i*2*\dx},{-1 + \j*3*\a/2},1);
+        \draw (tpp cs:{0 +  \j*\dx + \i*2*\dx},{-1+\a/2 + \j*3*\a/2},1) -- (tpp cs:{0 +  \j*\dx + \i*2*\dx},{-1+\a/2 + \a + \j*3*\a/2},1);
+
+        \shade[ball color=blue] (tpp cs:{ \j*\dx-1*\dx + \i*2*\dx},{-1 + \j*3*\a/2},1) circle [radius=0.5pt];
+        \shade[ball color=yellow] (tpp cs:{ \j*\dx-1*\dx + \i*2*\dx + \dx},{-1 + \j*3*\a/2 + \a/2},1) circle [radius=0.5pt];
+    }
+}
+\end{scope}
+\def\Nx{2}
+\def\Nxplusone{3} %Change this whenever changing \Nx, Nxplusone = Nx + 1
+\def\Ny{2}
+\def\Nyminusone{1} %Change this whenever changing \Ny, Nyminusone = Ny - 1
+
+%Draws polariton wavenumber
+\def\polaritoncolor{black!100!black}
+\draw[->,\polaritoncolor,thick] (tpp cs:{-\xlimit*\dx - \dx + 4*sqrt(3)*\a/2 + sqrt(3)*\a/4},{-1 - 0.4*\a},{\ztop}) -- (tpp cs:{-\xlimit*\dx - \dx + 6*sqrt(3)*\a/2 + sqrt(3)*\a/4},{-1 - 0.4*\a},{\ztop}) node[below]{$\vb{q}$};
+
+%Draws polariton evanescent field
+\def\epsilonbottom{12*\a}
+
+\def\epsilontop{5*\a}
+
+   \draw[domain={-\xlimit*\dx - \dx}:{-\xlimit*\dx - \dx + 5*\a},\polaritoncolor,very thick, smooth]
+      plot
+        (tpp cs:\x,{-1},{\ztop-0.5*\a*exp(-\epsilonbottom*(\x - (-\xlimit*\dx - \dx))/\a)) });
+
+    \draw[domain={-\xlimit*\dx - \dx}:{-\xlimit*\dx - \dx + 5*\a},\polaritoncolor,very thick, smooth]
+      plot
+        (tpp cs:\x,{-1},{\ztop+1.5*\a*exp(-\epsilontop*(\x - (-\xlimit*\dx - \dx))/\a)) });
+
+
+\foreach \j in {0,...,3}
+{ 
+    \draw[red] (tpp cs:{-\a/2}, {(((\ylimit-1)*\a+(\ylimit-1)*\a/2)/2} ,{1 + 2.25*\a - 2*\j*\a/5}) -- (tpp cs:{\a/2}, {((\ylimit-1)*\a+(\ylimit-1)*\a/2)/2} ,{1 + 2.25*\a - 2*\j*\a/5});
+}
+\draw[->,red, very thick] (tpp cs:0, {((\ylimit-1)*\a+(\ylimit-1)*\a/2)/2} ,{1 + 2.5*\a}) -- (tpp cs:0, {((\ylimit-1)*\a+(\ylimit-1)*\a/2)/2} ,{1+ 0.5*\a});
+
+\draw (tpp cs:{-0.6*\a}, {((\ylimit-1)*\a+(\ylimit-1)*\a/2)/2} ,{1+ 1.9*\a}) node[anchor=north east] { \textcolor{black}{$\omega$}};
+
+
+\end{tikzpicture}
+\end{document}
