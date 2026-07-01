@@ -5,5 +5,3 @@ Representation of a wavevector k in three-dimensional Euclidean space using cart
 <p align="center">
   <img src="Asymptote/Wavevector/wavevector.pdf" width="50%" height="50%">
 </p>
-
-
